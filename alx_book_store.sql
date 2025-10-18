@@ -1,95 +1,102 @@
-DROP DATABASE IF EXISTS `alx_book_store`;
-CREATE DATABASE IF NOT EXISTS `alx_book_store`
-  DEFAULT CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
+#!/usr/bin/env python3
+"""
+MySQLServer.py
+Creates the 'alx_book_store' database and executes the SQL inside alx_book_store.sql
+(alx_book_store.sql should contain only table creation statements, NOT CREATE DATABASE).
+"""
 
-USE `alx_book_store`;
+import os
+import mysql.connector
+from mysql.connector import Error
 
-CREATE TABLE `Authors` (
-  `author_id` INT NOT NULL AUTO_INCREMENT,
-  `author_name` VARCHAR(215) NOT NULL,
-  PRIMARY KEY (`author_id`)
-) ENGINE=InnoDB;
-S TABLE
-CREATE TABLE `Books` (
-  `book_id` INT NOT NULL AUTO_INCREMENT,
-  `title` VARCHAR(130) NOT NULL,
-  `author_id` INT NOT NULL,
-  `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  `publication_date` DATE,
-  PRIMARY KEY (`book_id`),
-  INDEX `idx_books_author` (`author_id`),
-  CONSTRAINT `fk_books_author` FOREIGN KEY (`author_id`)
-    REFERENCES `Authors` (`author_id`)
-    ON DELETE RESTRICT
-    ON UPDATE CASCADE
-) ENGINE=InnoDB;
+SQL_FILE = "alx_book_store.sql"
+DB_NAME = "alx_book_store"
 
-CREATE TABLE `Customers` (
-  `customer_id` INT NOT NULL AUTO_INCREMENT,
-  `customer_name` VARCHAR(215) NOT NULL,
-  `email` VARCHAR(215) NOT NULL,
-  `address` TEXT,
-  PRIMARY KEY (`customer_id`),
-  UNIQUE KEY `uq_customers_email` (`email`)
-) ENGINE=InnoDB;
+def read_sql_file(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
 
-CREATE TABLE `Orders` (
-  `order_id` INT NOT NULL AUTO_INCREMENT,
-  `customer_id` INT NOT NULL,
-  `order_date` DATE NOT NULL,
-  PRIMARY KEY (`order_id`),
-  INDEX `idx_orders_customer` (`customer_id`),
-  CONSTRAINT `fk_orders_customer` FOREIGN KEY (`customer_id`)
-    REFERENCES `Customers` (`customer_id`)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE
-) ENGINE=InnoDB;
+def execute_sql_script(cursor, sql_script):
+    """
+    Execute SQL script which may contain multiple statements separated by ';'.
+    Uses cursor.execute(..., multi=True) to run multi-statement scripts.
+    """
+    for result in cursor.execute(sql_script, multi=True):
+        # We avoid using SELECT/SHOW. We also don't need to fetch results.
+        # The loop ensures all statements are executed.
+        pass
 
-CREATE TABLE `Order_Details` (
-  `orderdetailid` INT NOT NULL AUTO_INCREMENT,
-  `order_id` INT NOT NULL,
-  `book_id` INT NOT NULL,
-  `quantity` INT NOT NULL DEFAULT 1,
-  PRIMARY KEY (`orderdetailid`),
-  INDEX `idx_od_order` (`order_id`),
-  INDEX `idx_od_book` (`book_id`),
-  CONSTRAINT `fk_od_order` FOREIGN KEY (`order_id`)
-    REFERENCES `Orders` (`order_id`)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE,
-  CONSTRAINT `fk_od_book` FOREIGN KEY (`book_id`)
-    REFERENCES `Books` (`book_id`)
-    ON DELETE RESTRICT
-    ON UPDATE CASCADE
-) ENGINE=InnoDB;
+def create_database_and_tables(host="localhost", user="root", password=""):
+    connection = None
+    cursor = None
+    try:
+        # 1) Connect to MySQL server (no database specified)
+        connection = mysql.connector.connect(
+            host=host,
+            user=user,
+            password=password,
+            autocommit=True  # avoid needing explicit commit for CREATE DATABASE
+        )
 
+        if not connection.is_connected():
+            raise Error("Failed to connect to MySQL server.")
 
-INSERT INTO `Authors` (`author_name`) VALUES
-  ('Chinua Achebe'),
-  ('Chimamanda Ngozi Adichie'),
-  ('J.K. Rowling');
+        cursor = connection.cursor()
+        # Create database if it doesn't exist (safe if it already exists)
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{DB_NAME}`")
+        print(f"Database '{DB_NAME}' created successfully!")
 
+        # Close this cursor/connection and reconnect to the new database
+        cursor.close()
+        connection.close()
 
-INSERT INTO `Books` (`title`, `author_id`, `price`, `publication_date`) VALUES
-  ('Things Fall Apart', 1, 12.99, '1958-06-17'),
-  ('Half of a Yellow Sun', 2, 14.50, '2006-09-15'),
-  ('Harry Potter and the Sorcerer\'s Stone', 3, 19.99, '1997-06-26');
+        # 2) Reconnect specifying the database to run table creation scripts
+        connection = mysql.connector.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=DB_NAME
+        )
+        if not connection.is_connected():
+            raise Error(f"Failed to connect to MySQL database '{DB_NAME}'.")
 
--- CUSTOMERS
-INSERT INTO `Customers` (`customer_name`, `email`, `address`) VALUES
-  ('Alice N.', 'alice@example.com', '123 Kigali St, Kigali, Rwanda'),
-  ('Bob K.', 'bob.k@example.com', '45 Valley Rd, Kigali, Rwanda');
+        cursor = connection.cursor()
+        # Read SQL file
+        if not os.path.isfile(SQL_FILE):
+            raise FileNotFoundError(f"SQL file '{SQL_FILE}' not found in current directory.")
 
--- ORDERS
-INSERT INTO `Orders` (`customer_id`, `order_date`) VALUES
-  (1, '2025-10-01'),
-  (2, '2025-10-05');
+        sql_script = read_sql_file(SQL_FILE)
 
--- ORDER DETAILS
-INSERT INTO `Order_Details` (`order_id`, `book_id`, `quantity`) VALUES
-  (1, 1, 1),
-  (1, 3, 2),
-  (2, 2, 1);
+        # Execute the SQL script (multi-statement)
+        execute_sql_script(cursor, sql_script)
+        connection.commit()
 
--- END OF FILE
+        print("SQL script executed successfully — tables should be created (Authors, Books, Customers, Orders, Order_Details).")
+
+    except FileNotFoundError as fnf:
+        print(f"File error: {fnf}")
+    except Error as e:
+        print(f"Error while connecting to MySQL or executing SQL: {e}")
+    except Exception as ex:
+        print(f"Unexpected error: {ex}")
+    finally:
+        # Clean up: close cursor and connection if open
+        try:
+            if cursor is not None:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if connection is not None and connection.is_connected():
+                connection.close()
+        except Exception:
+            pass
+
+if __name__ == "__main__":
+    # Replace password argument or set to empty to prompt change in script
+    # You can also wrap this call to read credentials from environment variables if desired.
+    create_database_and_tables(
+        host="localhost",
+        user="root",
+        password="your_password_here"  # <-- replace with your MySQL password
+    )

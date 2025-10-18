@@ -1,86 +1,48 @@
 #!/usr/bin/env python3
 """
 MySQLServer.py
-Creates the 'alx_book_store' database and executes the SQL inside alx_book_store.sql
-(alx_book_store.sql should contain only table creation statements, NOT CREATE DATABASE).
+Creates the 'alx_book_store' database on the MySQL server.
+- If the database already exists, the script will NOT fail.
+- Does NOT use SELECT or SHOW.
+- Prints a success message when the CREATE statement runs.
+- Prints error messages if connection/execution fails.
+- Properly opens and closes cursor and connection.
 """
 
-import os
+import sys
 import mysql.connector
 from mysql.connector import Error
 
-SQL_FILE = "alx_book_store.sql"
 DB_NAME = "alx_book_store"
 
-def read_sql_file(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
-
-def execute_sql_script(cursor, sql_script):
-    """
-    Execute SQL script which may contain multiple statements separated by ';'.
-    Uses cursor.execute(..., multi=True) to run multi-statement scripts.
-    """
-    for result in cursor.execute(sql_script, multi=True):
-        # We avoid using SELECT/SHOW. We also don't need to fetch results.
-        # The loop ensures all statements are executed.
-        pass
-
-def create_database_and_tables(host="localhost", user="root", password=""):
+def create_database(host="localhost", user="root", password=""):
     connection = None
     cursor = None
     try:
-        # 1) Connect to MySQL server (no database specified)
+        # Connect to MySQL server (no database selected)
         connection = mysql.connector.connect(
             host=host,
             user=user,
             password=password,
-            autocommit=True  # avoid needing explicit commit for CREATE DATABASE
+            autocommit=True  # ensure DDL runs without explicit commit
         )
 
         if not connection.is_connected():
-            raise Error("Failed to connect to MySQL server.")
+            print("Error: Unable to connect to MySQL server.")
+            return
 
         cursor = connection.cursor()
-        # Create database if it doesn't exist (safe if it already exists)
+        # Create database if it does not exist (safe if already present)
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{DB_NAME}`")
+        # Per requirements, print this message when the CREATE runs successfully
         print(f"Database '{DB_NAME}' created successfully!")
 
-        # Close this cursor/connection and reconnect to the new database
-        cursor.close()
-        connection.close()
-
-        # 2) Reconnect specifying the database to run table creation scripts
-        connection = mysql.connector.connect(
-            host=host,
-            user=user,
-            password=password,
-            database=DB_NAME
-        )
-        if not connection.is_connected():
-            raise Error(f"Failed to connect to MySQL database '{DB_NAME}'.")
-
-        cursor = connection.cursor()
-        # Read SQL file
-        if not os.path.isfile(SQL_FILE):
-            raise FileNotFoundError(f"SQL file '{SQL_FILE}' not found in current directory.")
-
-        sql_script = read_sql_file(SQL_FILE)
-
-        # Execute the SQL script (multi-statement)
-        execute_sql_script(cursor, sql_script)
-        connection.commit()
-
-        print("SQL script executed successfully — tables should be created (Authors, Books, Customers, Orders, Order_Details).")
-
-    except FileNotFoundError as fnf:
-        print(f"File error: {fnf}")
-    except Error as e:
-        print(f"Error while connecting to MySQL or executing SQL: {e}")
+    except Error as err:
+        print(f"Error while connecting to MySQL or executing statement: {err}")
     except Exception as ex:
         print(f"Unexpected error: {ex}")
     finally:
-        # Clean up: close cursor and connection if open
+        # Close cursor and connection if they were opened
         try:
             if cursor is not None:
                 cursor.close()
@@ -93,10 +55,6 @@ def create_database_and_tables(host="localhost", user="root", password=""):
             pass
 
 if __name__ == "__main__":
-    # Replace password argument or set to empty to prompt change in script
-    # You can also wrap this call to read credentials from environment variables if desired.
-    create_database_and_tables(
-        host="localhost",
-        user="root",
-        password="your_password_here"  # <-- replace with your MySQL password
-    )
+    # Replace the password below (or supply via environment variables / external config)
+    # Example usage: modify host/user/password as needed before running.
+    create_database(host="localhost", user="root", password="your_password_here")
